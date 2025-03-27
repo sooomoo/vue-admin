@@ -2,7 +2,8 @@
 import { RouterLink, RouterView } from 'vue-router'
 import HelloWorld from './components/HelloWorld.vue'
 import { onUnmounted, onBeforeMount, onMounted } from 'vue';
-import { onWebSocketMessage, postMessageToWebSocket, closeWebSocket, startWebSocket } from './workers/websocket';
+import { onWebSocketMessage, postConnectCmdToWebSocket, closeWebSocket, startWebSocket } from './workers/websocket';
+import { WebSocketCmdConnect } from './workers/websocket_cmd';
 
 onMounted(() => {
   console.log(performance.now())
@@ -11,7 +12,7 @@ onMounted(() => {
   onWebSocketMessage((event) => {
     console.log('Received message from shared worker:', event.data);
   })
-  postMessageToWebSocket({ cmd: 'hi', data: 'Hello from main page!此' })
+  postConnectCmdToWebSocket('ws://localhost:8080')
 })
 
 onUnmounted(() => {

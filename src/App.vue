@@ -1,6 +1,25 @@
 <script setup lang="ts">
 import { RouterLink, RouterView } from 'vue-router'
 import HelloWorld from './components/HelloWorld.vue'
+import { onUnmounted, onBeforeMount, onMounted } from 'vue';
+import { onWebSocketMessage, postMessageToWebSocket, closeWebSocket, startWebSocket } from './workers/websocket';
+
+onMounted(() => {
+  console.log(performance.now())
+  console.log('Mounted')
+  startWebSocket()
+  onWebSocketMessage((event) => {
+    console.log('Received message from shared worker:', event.data);
+  })
+  postMessageToWebSocket({ cmd: 'hi', data: 'Hello from main page!此' })
+})
+
+onUnmounted(() => {
+  console.log(performance.now())
+  console.log('Unmounted')
+  closeWebSocket()
+})
+
 </script>
 
 <template>

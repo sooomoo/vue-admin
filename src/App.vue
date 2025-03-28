@@ -1,18 +1,34 @@
 <script setup lang="ts">
 import { RouterLink, RouterView } from 'vue-router'
 import HelloWorld from './components/HelloWorld.vue'
-import { onUnmounted, onBeforeMount, onMounted } from 'vue';
-import { onWebSocketMessage, postConnectCmdToWebSocket, closeWebSocket, startWebSocket } from './workers/websocket';
-import { WebSocketCmdConnect } from './workers/websocket_cmd';
+import { onUnmounted, onBeforeMount, onMounted, ref } from 'vue'
+import {
+  onWebSocketMessage,
+  postConnectCmdToWebSocket,
+  closeWebSocket,
+  startWebSocket,
+} from './workers/websocket'
+
+const token = ref('')
 
 onMounted(() => {
   console.log(performance.now())
   console.log('Mounted')
   startWebSocket()
   onWebSocketMessage((event) => {
-    console.log('Received message from shared worker:', event.data);
+    console.log('Received message from shared worker:', event.data)
   })
   postConnectCmdToWebSocket('ws://localhost:8080')
+
+  const stoken = localStorage.getItem('token')
+  console.log('session token', stoken)
+
+  window.addEventListener('storage', (event) => {
+    console.log('变化的键: ', event.key);
+    console.log('旧值: ', event.oldValue);
+    console.log('新值: ', event.newValue);
+    console.log('变化发生的 URL: ', event.url);
+  })
 })
 
 onUnmounted(() => {
@@ -21,6 +37,10 @@ onUnmounted(() => {
   closeWebSocket()
 })
 
+const handleClick = () => {
+  console.log('token', token.value)
+  localStorage.setItem('token', token.value)
+}
 </script>
 
 <template>
@@ -28,16 +48,12 @@ onUnmounted(() => {
     <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="125" height="125" />
 
     <div class="wrapper">
-      <HelloWorld msg="You did it!" />
+      <input type="text" v-model="token" />
+      <button @click="handleClick">click me</button>
 
-      <nav>
-        <RouterLink to="/">Home</RouterLink>
-        <RouterLink to="/about">About</RouterLink>
-      </nav>
     </div>
   </header>
 
-  <RouterView />
 </template>
 
 <style scoped>

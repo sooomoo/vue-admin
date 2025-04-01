@@ -19,6 +19,7 @@
   "dependencies": {
     "@juanelas/base64": "^1.1.5",
     "axios": "^1.8.4",
+    "loglevel": "^1.9.2",
     "pinia": "^3.0.1",
     "tweetnacl": "^1.0.3",
     "vue": "^3.5.13",

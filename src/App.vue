@@ -1,44 +1,46 @@
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router'
-import HelloWorld from './components/HelloWorld.vue'
-import { onUnmounted, onBeforeMount, onMounted, ref } from 'vue'
+import log from 'loglevel'
+import { onUnmounted, onMounted, ref } from 'vue'
 import {
   onWebSocketMessage,
   postConnectCmdToWebSocket,
   closeWebSocket,
   startWebSocket,
 } from './workers/websocket'
+import { hideSplashScreen } from './core/splash_screen'
 
 const token = ref('')
 
 onMounted(() => {
-  console.log(performance.now())
-  console.log('Mounted')
+  log.debug('App mounted', performance.now())
   startWebSocket()
   onWebSocketMessage((event) => {
-    console.log('Received message from shared worker:', event.data)
+    log.debug('Received message from shared worker:', event.data)
   })
   postConnectCmdToWebSocket('ws://localhost:8080')
 
   const stoken = localStorage.getItem('token')
-  console.log('session token', stoken)
+  log.debug('session token', stoken)
 
   window.addEventListener('storage', (event) => {
-    console.log('变化的键: ', event.key);
-    console.log('旧值: ', event.oldValue);
-    console.log('新值: ', event.newValue);
-    console.log('变化发生的 URL: ', event.url);
+    log.debug('变化的键: ', event.key);
+    log.debug('旧值: ', event.oldValue);
+    log.debug('新值: ', event.newValue);
+    log.debug('变化发生的 URL: ', event.url);
   })
+ 
+  // hide splash screen after app mounted
+  hideSplashScreen()
 })
 
 onUnmounted(() => {
-  console.log(performance.now())
-  console.log('Unmounted')
+  log.debug(performance.now())
+  log.debug('Unmounted')
   closeWebSocket()
 })
 
 const handleClick = () => {
-  console.log('token', token.value)
+  log.debug('token', token.value)
   localStorage.setItem('token', token.value)
 }
 </script>
@@ -46,14 +48,11 @@ const handleClick = () => {
 <template>
   <header>
     <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="125" height="125" />
-
     <div class="wrapper">
       <input type="text" v-model="token" />
       <button @click="handleClick">click me</button>
-
     </div>
   </header>
-
 </template>
 
 <style scoped>

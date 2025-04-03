@@ -20,8 +20,7 @@ onMounted(async () => {
   })
   postConnectCmdToWebSocket('ws://localhost:8080')
 
-  const stoken = localStorage.getItem('token')
-  log.debug('session token', stoken)
+  const stoken = localStorage.getItem('token') 
 
   window.addEventListener('storage', (event) => {
     log.debug('变化的键: ', event.key);

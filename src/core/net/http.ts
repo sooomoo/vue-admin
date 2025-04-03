@@ -17,9 +17,92 @@ export interface ResponseDto<T> {
     data: T
 }
 
+export const getClientId = (): string=>{
+    const cookie = document.cookie
+    // 获取客户端唯一Id
+    let clientId = cookie.split(';').find(c => c.trim().startsWith('ci='))?.split('=')[1]
+    if (!clientId) {
+        clientId = crypto.randomUUID().replace(/-/g, '')
+        document.cookie = `ci=${clientId};path=/;samesite=lax`
+    }
+    return clientId
+}
+
+const obscureKeyPair = (boxKeyPair: nacl.BoxKeyPair, signKeyPair: nacl.SignKeyPair): string => {
+    const publicKey = boxKeyPair.publicKey
+    const secretKey = boxKeyPair.secretKey
+    const signPublicKey = signKeyPair.publicKey
+    const signSecretKey = signKeyPair.secretKey
+    const nonce = nacl.randomBytes(24)
+    const joined = new Uint8Array([...publicKey, ...secretKey, ...signPublicKey, ...signSecretKey])  
+    for (let i = 0; i < joined.length; i++) {
+        const char = joined[i]
+        const code = nonce[i%24]
+        joined[i] = char ^ code
+    }
+    const final = new Uint8Array([...nonce, ...joined]) 
+    return base64.encode(final)
+}
+
+const decodeKeyPair = (encoded: string): [nacl.BoxKeyPair | null, nacl.SignKeyPair | null] => {
+    const totalLength = 24 + nacl.box.publicKeyLength + nacl.box.secretKeyLength + nacl.sign.publicKeyLength + nacl.sign.secretKeyLength
+    if (!encoded || encoded.length < totalLength) {
+        return [null, null]
+    }
+    const decoded = base64.decode(encoded)
+    if (decoded.length != totalLength) {
+        return [null, null]
+    }
+    const nonce = decoded.slice(0, 24)
+    const joined = decoded.slice(24)
+    for (let i = 0; i < joined.length; i++) {
+        const char = joined[i]
+        const code = nonce[i%24]
+        joined[i] = char ^ code
+    }
+    let start = 0
+    const publicKey = joined.slice(start, nacl.box.publicKeyLength)
+    start += nacl.box.publicKeyLength
+    const secretKey = joined.slice(start, start+nacl.box.secretKeyLength)
+    start += nacl.box.secretKeyLength
+    const signPublicKey = joined.slice(start, start+nacl.sign.publicKeyLength)
+    start += nacl.sign.publicKeyLength
+    const signSecretKey = joined.slice(start, start+nacl.sign.secretKeyLength)
+    return [{ publicKey, secretKey },{ publicKey: signPublicKey, secretKey: signSecretKey }]
+}
+
+export const decodeSecrets = ():[nacl.BoxKeyPair , nacl.SignKeyPair]=>{
+    const cookie = document.cookie
+    // 获取客户端公私钥
+    let clientKey = cookie.split(';').find(c => c.trim().startsWith('ck='))?.split('=')[1]
+    let keyPair: nacl.BoxKeyPair | null = null
+    let signKeyPair: nacl.SignKeyPair | null = null
+    if (clientKey) {
+        [keyPair, signKeyPair] = decodeKeyPair(clientKey) 
+    }
+    if (!keyPair || !signKeyPair) {
+        keyPair = nacl.box.keyPair()
+        signKeyPair = nacl.sign.keyPair()
+        clientKey = obscureKeyPair(keyPair, signKeyPair)
+        document.cookie = `ck=${clientKey};path=/;samesite=lax`
+    }
+    return [keyPair, signKeyPair]
+}
+
+const negotiateIfNeeded = async () => { 
+    // 获取客户端唯一Id
+    const clientId = getClientId()
+    const [keyPair, signKeyPair] = decodeSecrets() 
+
+    const publicKey = base64.encode(keyPair.publicKey)
+    const secretKey = base64.encode(keyPair.secretKey)
+    return { publicKey, secretKey }
+}
+
 // get 请求不需要加密，因为没有请求体；只需要做签名即可
 export const doGet = async  <T = any>(path: string, query?: Record<string, any>): Promise<T | null> => {
     try {
+        
         // 需要对请求进行签名
         const nonce = nacl.randomBytes(24)
         const nonceBase64 = base64.encode(nonce)

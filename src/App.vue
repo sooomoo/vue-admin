@@ -8,10 +8,11 @@ import {
   startWebSocket,
 } from './workers/websocket'
 import { hideSplashScreen } from './core/splash_screen'
+import { decodeSecrets, getClientId } from './core/net/http'
 
 const token = ref('')
 
-onMounted(() => {
+onMounted(async () => {
   log.debug('App mounted', performance.now())
   startWebSocket()
   onWebSocketMessage((event) => {
@@ -28,9 +29,15 @@ onMounted(() => {
     log.debug('新值: ', event.newValue);
     log.debug('变化发生的 URL: ', event.url);
   })
- 
+
   // hide splash screen after app mounted
   hideSplashScreen()
+  const clientId = getClientId()
+  log.debug('clientId', clientId)
+
+  const [keyPair, signKeyPair] = decodeSecrets()
+  log.debug('keyPair', keyPair)
+  log.debug('signKeyPair', signKeyPair)
 })
 
 onUnmounted(() => {
@@ -46,13 +53,11 @@ const handleClick = () => {
 </script>
 
 <template>
-  <header>
-    <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="125" height="125" />
-    <div class="wrapper">
-      <input type="text" v-model="token" />
-      <button @click="handleClick">click me</button>
-    </div>
-  </header>
+  <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="125" height="125" />
+  <div class="wrapper">
+    <input type="text" v-model="token" />
+    <button @click="handleClick">click me</button>
+  </div>
 </template>
 
 <style scoped>

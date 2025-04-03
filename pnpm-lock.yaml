@@ -11,6 +11,9 @@ importers:
       '@juanelas/base64':
         specifier: ^1.1.5
         version: 1.1.5
+      '@openpgp/tweetnacl':
+        specifier: 1.0.4-2
+        version: 1.0.4-2
       axios:
         specifier: ^1.8.4
         version: 1.8.4
@@ -529,6 +532,9 @@ packages:
 
   '@one-ini/wasm@0.1.1':
     resolution: {integrity: sha512-XuySG1E38YScSJoMlqovLru4KTUNSjgVTIjyh7qMX6aNN5HY5Ct5LhRJdxO79JtTzKfzV/bnWpz+zquYrISsvw==}
+
+  '@openpgp/tweetnacl@1.0.4-2':
+    resolution: {integrity: sha512-eBLUs0Z3yk0TDyZissp4UtpAsp+EJAdNfgC1S/roPcRpcRW0DSC8nqug0xEA5NHWJVxuM9D4uBeXRt1V9XfaEw==}
 
   '@oxlint/darwin-arm64@0.15.15':
     resolution: {integrity: sha512-7GOyGM6D36lUhsOvavAVpF72SycPVG0Enunx0bzv8g0+9TklzOSFN3FJlZjLst14VPdZWujZMLgkQC7tOp+Rwg==}
@@ -2690,6 +2696,8 @@ snapshots:
       fastq: 1.19.1
 
   '@one-ini/wasm@0.1.1': {}
+
+  '@openpgp/tweetnacl@1.0.4-2': {}
 
   '@oxlint/darwin-arm64@0.15.15':
     optional: true

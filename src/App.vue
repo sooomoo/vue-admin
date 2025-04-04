@@ -8,9 +8,12 @@ import {
   startWebSocket,
 } from './workers/websocket'
 import { hideSplashScreen } from './core/splash_screen'
-import { decodeSecrets, getClientId } from './core/net/http'
+import { base64Encode, decodeSecrets } from './core/net/secure'
+import { doPost } from './core/net/http'
 
 const token = ref('')
+
+const demos = "abc12345"
 
 onMounted(async () => {
   log.debug('App mounted', performance.now())
@@ -19,9 +22,7 @@ onMounted(async () => {
     log.debug('Received message from shared worker:', event.data)
   })
   postConnectCmdToWebSocket('ws://localhost:8080')
-
-  const stoken = localStorage.getItem('token') 
-
+ 
   window.addEventListener('storage', (event) => {
     log.debug('变化的键: ', event.key);
     log.debug('旧值: ', event.oldValue);
@@ -31,12 +32,17 @@ onMounted(async () => {
 
   // hide splash screen after app mounted
   hideSplashScreen()
-  const clientId = getClientId()
-  log.debug('clientId', clientId)
 
-  const [keyPair, signKeyPair] = decodeSecrets()
-  log.debug('keyPair', keyPair)
-  log.debug('signKeyPair', signKeyPair)
+  const [keyPair, signKeyPair, sessionId] = decodeSecrets()
+  log.debug('keyPair', keyPair, {
+    pub: base64Encode(keyPair.publicKey, true, false),
+    pri:  base64Encode(keyPair.secretKey, true, false),
+  })
+  log.debug('signKeyPair', signKeyPair, keyPair, {
+    pub: base64Encode(signKeyPair.publicKey, true, false),
+    pri:  base64Encode(signKeyPair.secretKey, true, false),
+  })
+  log.debug('clientId', sessionId)
 })
 
 onUnmounted(() => {
@@ -46,8 +52,11 @@ onUnmounted(() => {
 })
 
 const handleClick = () => {
-  log.debug('token', token.value)
-  localStorage.setItem('token', token.value)
+  doPost('/v1/auth/login', {
+    phone: '008613800001111',
+    code: '2345',
+    secure_code: '3333'
+  })
 }
 </script>
 

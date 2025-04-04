@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import axios, { type AxiosRequestConfig } from 'axios';
 import log from 'loglevel';
 import {
@@ -8,7 +9,9 @@ import {
     generateSignature,
     verifySignature,
     decryptData,
-    encryptData
+    encryptData,
+    isCryptoEnabled,
+    base64Decode
 } from './secure';
 
 const signHeaderTimestamp = "X-Timestamp";
@@ -33,8 +36,10 @@ const httpInstance = axios.create({
     baseURL: import.meta.env.VITE_API_BASE_URL,
     timeout: 15000,
     withCredentials: false,
-    validateStatus: (_e: any) => true,
+    validateStatus: (_e: number) => true,
 });
+
+
 
 // get 请求不需要加密，因为没有请求体；只需要做签名即可
 export const doGet = async  <T = any>(path: string, query?: Record<string, any>): Promise<T | null> => {
@@ -90,7 +95,7 @@ export const doGet = async  <T = any>(path: string, query?: Record<string, any>)
         })
         if (verifySignature(respStr, respSignature)) {
             let respData = resp.data
-            if (import.meta.env.VITE_ENABLE_CRYPTO && resp.headers['Content-Type'] === contentTypeEncrypted) {
+            if (isCryptoEnabled() && resp.headers['Content-Type'] === contentTypeEncrypted) {
                 // 解密
                 respData = decryptData(boxKeyPair, resp.data)
             }
@@ -114,7 +119,7 @@ export const doPost = async  <T = any>(path: string, data?: Record<string, any>,
         let reqData = ''
         if (data) {
             reqData = JSON.stringify(data)
-            if (import.meta.env.VITE_ENABLE_CRYPTO) {
+            if (isCryptoEnabled()) {
                 reqData = encryptData(boxKeyPair, reqData)
             }
         }
@@ -133,7 +138,8 @@ export const doPost = async  <T = any>(path: string, data?: Record<string, any>,
             "body": reqData,
         })
 
-        const reqSignature = generateSignature(signKeyPair, str)
+        const reqSignature = generateSignature(signKeyPair, "12345")
+        log.debug(`【${path}】<POST> request data is`, reqData, str, base64Decode(reqSignature))
         const headers: Record<string, string> = {
             [signHeaderPlatform]: platform,
             [signHeaderSession]: sessionId,
@@ -145,7 +151,7 @@ export const doPost = async  <T = any>(path: string, data?: Record<string, any>,
         if (token) {
             headers['Authorization'] = `Bearer ${token}`
         }
-        if (import.meta.env.VITE_ENABLE_CRYPTO) {
+        if (isCryptoEnabled()) {
             headers['Content-Type'] = contentTypeEncrypted
         }
         const resp = await httpInstance.post<String>(path, reqData, {
@@ -172,7 +178,7 @@ export const doPost = async  <T = any>(path: string, data?: Record<string, any>,
         })
         if (verifySignature(respStr, respSignature)) {
             let respData = resp.data
-            if (import.meta.env.VITE_ENABLE_CRYPTO && resp.headers['Content-Type'] === contentTypeEncrypted) {
+            if (isCryptoEnabled() && resp.headers['Content-Type'] === contentTypeEncrypted) {
                 // 解密
                 respData = decryptData(boxKeyPair, resp.data)
             }

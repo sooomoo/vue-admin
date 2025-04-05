@@ -10,8 +10,8 @@ import {
     decryptData,
     encryptData,
     isCryptoEnabled,
-    base64Decode,
-    stringifyObj
+    stringifyObj,
+    type KeyPair
 } from './secure';
 
 const signHeaderTimestamp = "x-timestamp";
@@ -39,10 +39,32 @@ const httpInstance = axios.create({
     validateStatus: (_e: number) => true,
 });
 
-
+const encryptRequestBodyIfNeeded = (kp: KeyPair, data: any): any => {
+    if (!data) {
+        return data
+    }
+    const reqData = JSON.stringify(data)
+    if (isCryptoEnabled()) {
+        return encryptData(kp, reqData)
+    }
+    return reqData
+}
+const appendTokenToHeader = (headers: Record<string, string>) => {
+    const token = getToken()
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+    }
+}
+const appendContentTypeEncryptedIfNeeded = (headers: Record<string, string>) => {
+    if (isCryptoEnabled()) {
+        headers['Content-Type'] = contentTypeEncrypted
+    }
+}
 
 // get 请求不需要加密，因为没有请求体；只需要做签名即可
 export const doGet = async  <T = any>(path: string, query?: Record<string, any>): Promise<T | null> => {
+    const strQuery = query ? stringifyObj(query) : ""
+    const tag = `【GET: ${path}?${strQuery}】`
     try {
         const [boxKeyPair, signKeyPair, sessionId] = decodeSecrets()
         // 需要对请求进行签名
@@ -56,9 +78,13 @@ export const doGet = async  <T = any>(path: string, query?: Record<string, any>)
             "platform": platform,
             "method": "GET",
             "path": path,
-            "query": query ? stringifyObj(query) : "",
+            "query": strQuery,
         })
         const reqSignature = signData(signKeyPair, str)
+        log.debug(`${tag} request BEGIN........`)
+        log.debug(`${tag} request data to sign: `, str)
+        log.debug(`${tag} request sign keypair: `, signKeyPair)
+        log.debug(`${tag} request signature: `, reqSignature)
         const headers: Record<string, string> = {
             [signHeaderPlatform]: platform,
             [signHeaderSession]: sessionId,
@@ -66,18 +92,19 @@ export const doGet = async  <T = any>(path: string, query?: Record<string, any>)
             [signHeaderNonce]: nonce,
             [signHeaderSignature]: reqSignature,
         }
-        const token = getToken()
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`
-        }
+        appendTokenToHeader(headers)
+
+        log.debug(`${tag} request header: `, headers)
+        log.debug(`${tag} request END........`)
 
         const resp = await httpInstance.get<String>(path, {
             params: query,
             headers: headers,
             responseType: 'text',
         } as AxiosRequestConfig<any>)
+        log.debug(`${tag} response BEGIN........`)
+        log.debug(`${tag} response: `, resp)
         if (resp.status != 200 || typeof (resp.data) !== 'string') {
-            log.debug(`【${path}】<GET>【FAILED】 response fail detail is:`, resp)
             return null
         }
 
@@ -91,39 +118,44 @@ export const doGet = async  <T = any>(path: string, query?: Record<string, any>)
             "timestamp": respTimestamp,
             "method": "GET",
             "path": path,
-            "query": query ? stringifyObj(query) : "",
+            "query": strQuery,
             "body": resp.data,
         })
-        if (verifyDataSign(respStr, respSignature)) {
-            let respData = resp.data
-            if (isCryptoEnabled() && resp.headers['Content-Type'] === contentTypeEncrypted) {
-                // 解密
-                respData = decryptData(boxKeyPair, resp.data)
-            }
-            const val = JSON.parse(respData)
-            log.debug(`【${path}】<GET>【SUCCEED】 response data is`, respData, val)
-            return val
-        } else {
-            log.debug(`【${path}】<GET>【FAILED】 response data signature verify fail`)
+        log.debug(`${tag} response sign header: `, { respTimestamp, respNonce, respSignature })
+        log.debug(`${tag} response data to sign: `, respStr)
+        if (!verifyDataSign(respStr, respSignature)) {
+            log.debug(`${tag} response sign verify: FAIL`)
+            return null
         }
+
+        log.debug(`${tag} response sign verify: PASS`)
+        let respData = resp.data
+        if (isCryptoEnabled() && resp.headers['Content-Type'] === contentTypeEncrypted) {
+            // 解密
+            log.debug(`${tag} response <decrypt> BEFORE: `, resp.data)
+            respData = decryptData(boxKeyPair, resp.data)
+            log.debug(`${tag} response <decrypt> AFTER: `, respData)
+        }
+        log.debug(`${tag} response <JSON.parse> BEFORE: `, respData)
+        const val = JSON.parse(respData)
+        log.debug(`${tag} response <JSON.parse> AFTER: `, val)
+        return val
     } catch (error) {
-        log.error(`【${path}<GET>【FAILED】 fail detail is:`, error)
+        log.error(`【${path}【FAILED】 error is:`, error)
+    } finally {
+        log.debug(`${tag} response END........`)
     }
     return null
 }
 
 // post 请求需要加密，因为有请求体；同时，还需要做签名
 export const doPost = async  <T = any>(path: string, data?: Record<string, any>, query?: Record<string, any>): Promise<T | null> => {
+    const strQuery = query ? stringifyObj(query) : ""
+    const tag = `【POST: ${path}?${strQuery}】`
     try {
         const [boxKeyPair, signKeyPair, sessionId] = decodeSecrets()
         // 加密请求体
-        let reqData
-        if (data) {
-            reqData = JSON.stringify(data)
-            if (isCryptoEnabled()) {
-                reqData = encryptData(boxKeyPair, reqData)
-            }
-        }
+        const reqData = encryptRequestBodyIfNeeded(boxKeyPair, data)
         // 需要对请求进行签名
         const nonce = generateUUID()
         const timestamp = (Date.now() / 1000).toFixed()
@@ -135,12 +167,16 @@ export const doPost = async  <T = any>(path: string, data?: Record<string, any>,
             "platform": platform,
             "method": "POST",
             "path": path,
-            "query": query ? stringifyObj(query) : "",
+            "query": strQuery,
             "body": reqData,
         })
 
         const reqSignature = signData(signKeyPair, str)
-        log.debug(`【${path}】<POST> request data is`, reqData, str, base64Decode(reqSignature))
+        log.debug(`${tag} request BEGIN........`)
+        log.debug(`${tag} request data: `, reqData)
+        log.debug(`${tag} request data to sign: `, str)
+        log.debug(`${tag} request sign keypair: `, signKeyPair)
+        log.debug(`${tag} request signature: `, reqSignature)
         const headers: Record<string, string> = {
             [signHeaderPlatform]: platform,
             [signHeaderSession]: sessionId,
@@ -148,20 +184,20 @@ export const doPost = async  <T = any>(path: string, data?: Record<string, any>,
             [signHeaderNonce]: nonce,
             [signHeaderSignature]: reqSignature,
         }
-        const token = getToken()
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`
-        }
-        if (isCryptoEnabled()) {
-            headers['Content-Type'] = contentTypeEncrypted
-        }
+        appendTokenToHeader(headers)
+        appendContentTypeEncryptedIfNeeded(headers)
+
+        log.debug(`${tag} request header: `, headers)
+        log.debug(`${tag} request END........`)
+
         const resp = await httpInstance.post<String>(path, reqData, {
             params: query,
             headers: headers,
             responseType: 'text',
         } as AxiosRequestConfig<any>)
+        log.debug(`${tag} response BEGIN........`)
+        log.debug(`${tag} response: `, resp)
         if (resp.status != 200 || typeof (resp.data) !== 'string') {
-            log.debug(`【${path}】<POST>【FAILED】 response fail detail is:`, resp)
             return null
         }
 
@@ -175,22 +211,32 @@ export const doPost = async  <T = any>(path: string, data?: Record<string, any>,
             "timestamp": respTimestamp,
             "method": "POST",
             "path": path,
-            "query": query ? stringifyObj(query) : "",
+            "query": strQuery,
             "body": resp.data,
         })
-        if (verifyDataSign(respStr, respSignature)) {
-            let respData = resp.data
-            if (isCryptoEnabled() && resp.headers['content-type'] == contentTypeEncrypted) {
-                // 解密
-                respData = decryptData(boxKeyPair, resp.data)
-            }
-            const val = JSON.parse(respData)
-            log.debug(`【${path}】<POST>【SUCCEED】 response data is`, respData, val)
-        } else {
-            log.debug(`【${path}】<POST>【FAILED】 response data signature verify fail`)
+        log.debug(`${tag} response sign header: `, { respTimestamp, respNonce, respSignature })
+        log.debug(`${tag} response data to sign: `, respStr)
+        if (!verifyDataSign(respStr, respSignature)) {
+            log.debug(`${tag} response sign verify: FAIL`)
+            return null
         }
+
+        log.debug(`${tag} response sign verify: PASS`)
+        let respData = resp.data
+        if (isCryptoEnabled() && resp.headers['content-type'] == contentTypeEncrypted) {
+            // 解密
+            log.debug(`${tag} response <decrypt> BEFORE: `, resp.data)
+            respData = decryptData(boxKeyPair, resp.data)
+            log.debug(`${tag} response <decrypt> AFTER: `, respData)
+        }
+        log.debug(`${tag} response <JSON.parse> BEFORE: `, respData)
+        const val = JSON.parse(respData)
+        log.debug(`${tag} response <JSON.parse> AFTER: `, val)
+        return val
     } catch (error) {
-        log.error(`【${path}<POST>【FAILED】 fail detail is:`, error)
+        log.error(`【${path}【FAILED】 error is:`, error)
+    } finally {
+        log.debug(`${tag} response END........`)
     }
     return null
 }

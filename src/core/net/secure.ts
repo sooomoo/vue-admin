@@ -126,9 +126,9 @@ export const encryptData = (key: KeyPair, data: string): string => {
     const nonce = randomBytes(12)
     const aes = gcm(shareKey, nonce)
     const res = aes.encrypt(rawData)
-    log.debug(`【encryptData】secret is`, shareKey)
-    log.debug(`【encryptData】nonce is`, nonce)
-    log.debug(`【encryptData】result is`, res)
+    // log.debug(`【encryptData】secret is`, shareKey)
+    // log.debug(`【encryptData】nonce is`, nonce)
+    // log.debug(`【encryptData】result is`, res)
     return base64Encode(new Uint8Array([...nonce, ...res]))
 }
 
@@ -139,10 +139,10 @@ export const decryptData = (key: KeyPair, data: string): string => {
     const rawData = base64Decode(data)
     const nonce = rawData.slice(0, 12)
     const body = rawData.slice(12)
-    log.debug(`【decryptData】secret is`, shareKey)
-    log.debug(`【decryptData】rawData is`, rawData)
-    log.debug(`【decryptData】nonce is`, nonce)
-    log.debug(`【decryptData】body is`, body)
+    // log.debug(`【decryptData】secret is`, shareKey)
+    // log.debug(`【decryptData】rawData is`, rawData)
+    // log.debug(`【decryptData】nonce is`, nonce)
+    // log.debug(`【decryptData】body is`, body)
     const aes = gcm(shareKey, nonce)
     const decrypted = aes.decrypt(body)
     if (!decrypted) {
@@ -154,7 +154,7 @@ export const decryptData = (key: KeyPair, data: string): string => {
 export const stringifyObj = (obj: any) => {
     const keys = Object.keys(obj).sort()
     const strObj = keys.map(k => `${k}=${obj[k]}`).join('&')
-    log.debug(`【stringifyObj】strObj is`, obj, strObj)
+    // log.debug(`【stringifyObj】strObj is`, obj, strObj)
     return strObj
 }
 

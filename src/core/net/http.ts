@@ -124,7 +124,7 @@ export const doGet = async  <T = any>(path: string, query?: Record<string, any>)
         log.debug(`${tag} response sign header: `, { respTimestamp, respNonce, respSignature })
         log.debug(`${tag} response data to sign: `, respStr)
         if (!verifyDataSign(respStr, respSignature)) {
-            log.debug(`${tag} response sign verify: FAIL`)
+            log.warn(`${tag} response sign verify: FAIL`)
             return null
         }
 
@@ -217,7 +217,7 @@ export const doPost = async  <T = any>(path: string, data?: Record<string, any>,
         log.debug(`${tag} response sign header: `, { respTimestamp, respNonce, respSignature })
         log.debug(`${tag} response data to sign: `, respStr)
         if (!verifyDataSign(respStr, respSignature)) {
-            log.debug(`${tag} response sign verify: FAIL`)
+            log.warn(`${tag} response sign verify: FAIL`)
             return null
         }
 

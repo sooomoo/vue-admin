@@ -74,9 +74,10 @@ export const doGet = async  <T = any>(path: string, query?: Record<string, any>)
         const resp = await httpInstance.get<String>(path, {
             params: query,
             headers: headers,
+            responseType: 'text',
         } as AxiosRequestConfig<any>)
         if (resp.status != 200 || typeof (resp.data) !== 'string') {
-            log.debug(`【${path}】<GET> response fail detail is:`, resp)
+            log.debug(`【${path}】<GET>【FAILED】 response fail detail is:`, resp)
             return null
         }
 
@@ -100,13 +101,13 @@ export const doGet = async  <T = any>(path: string, query?: Record<string, any>)
                 respData = decryptData(boxKeyPair, resp.data)
             }
             const val = JSON.parse(respData)
-            log.debug(`【${path}】<GET> response data is`, respData, val)
+            log.debug(`【${path}】<GET>【SUCCEED】 response data is`, respData, val)
             return val
         } else {
-            log.debug(`【${path}】<GET> response data signature verify fail`)
+            log.debug(`【${path}】<GET>【FAILED】 response data signature verify fail`)
         }
     } catch (error) {
-        log.error(`【${path}<GET> fail detail is:`, error)
+        log.error(`【${path}<GET>【FAILED】 fail detail is:`, error)
     }
     return null
 }
@@ -157,9 +158,10 @@ export const doPost = async  <T = any>(path: string, data?: Record<string, any>,
         const resp = await httpInstance.post<String>(path, reqData, {
             params: query,
             headers: headers,
+            responseType: 'text',
         } as AxiosRequestConfig<any>)
         if (resp.status != 200 || typeof (resp.data) !== 'string') {
-            log.debug(`【${path}】<POST> response fail detail is:`, resp)
+            log.debug(`【${path}】<POST>【FAILED】 response fail detail is:`, resp)
             return null
         }
 
@@ -183,12 +185,12 @@ export const doPost = async  <T = any>(path: string, data?: Record<string, any>,
                 respData = decryptData(boxKeyPair, resp.data)
             }
             const val = JSON.parse(respData)
-            log.debug(`【${path}】<POST> response data is`, respData, val)
+            log.debug(`【${path}】<POST>【SUCCEED】 response data is`, respData, val)
         } else {
-            log.debug(`【${path}】<POST> response data signature verify fail`)
+            log.debug(`【${path}】<POST>【FAILED】 response data signature verify fail`)
         }
     } catch (error) {
-        log.error(`【${path}<POST> fail detail is:`, error)
+        log.error(`【${path}<POST>【FAILED】 fail detail is:`, error)
     }
     return null
 }

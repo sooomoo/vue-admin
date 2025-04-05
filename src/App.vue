@@ -8,9 +8,8 @@ import {
   startWebSocket,
 } from './workers/websocket'
 import { hideSplashScreen } from './core/splash_screen'
-import { base64Encode, decodeSecrets } from './core/net/secure'
+import { base64Encode, decodeSecrets, newBoxKeyPair, newSignKeyPair } from './core/net/secure'
 import { doPost } from './core/net/http'
-import nacl from 'tweetnacl'
 
 const token = ref('')
 
@@ -32,25 +31,20 @@ onMounted(async () => {
 
   // hide splash screen after app mounted
   hideSplashScreen()
+  const boxKeyPair1 = newBoxKeyPair()
+  const signKeyPair1 = newSignKeyPair()
+  log.debug('boxKeyPair1', boxKeyPair1, signKeyPair1)
 
   const [keyPair, signKeyPair, sessionId] = decodeSecrets()
-  log.debug('keyPair', keyPair, {
-    pub: base64Encode(keyPair.publicKey, true, false),
-    pri: base64Encode(keyPair.secretKey, true, false),
+  log.debug('signKeyPair', signKeyPair, {
+    pub: base64Encode(signKeyPair.publicKey),
+    pri: base64Encode(signKeyPair.privateKey),
   })
-  log.debug('signKeyPair', signKeyPair, keyPair, {
-    pub: base64Encode(signKeyPair.publicKey, true, false),
-    pri: base64Encode(signKeyPair.secretKey, true, false),
+  log.debug('keyPair', keyPair, {
+    pub: base64Encode(keyPair.publicKey),
+    pri: base64Encode(keyPair.privateKey),
   })
   log.debug('clientId', sessionId)
-
-
-  const message = new TextEncoder().encode('Hello, Ed25519!');
-  const signature = nacl.sign.detached(message, signKeyPair.secretKey)
-  const outStr = base64Encode(signature, true, false)
-  log.debug('outStr', outStr)
-  const verified = nacl.sign.detached.verify(message, signature, signKeyPair.publicKey);
-  log.debug('verified', verified)
 })
 
 onUnmounted(() => {

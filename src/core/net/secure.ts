@@ -1,160 +1,154 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import * as base64 from '@juanelas/base64'
-import nacl from 'tweetnacl';
 import log from 'loglevel';
+import { gcm } from '@noble/ciphers/aes';
+import { bytesToHex, bytesToUtf8, equalBytes, hexToBytes, utf8ToBytes } from '@noble/ciphers/utils';
+import { randomBytes } from '@noble/ciphers/webcrypto';
+import { x25519, ed25519 } from '@noble/curves/ed25519';
 
-export const encoder = new TextEncoder()
-export const decoder = new TextDecoder()
+export interface KeyPair {
+    publicKey: Uint8Array
+    privateKey: Uint8Array
+}
+
+// 生成一个新的加密密钥对
+export const newBoxKeyPair = (): KeyPair => {
+    const privateKey = x25519.utils.randomPrivateKey()
+    const publicKey = x25519.getPublicKey(privateKey)
+    return { publicKey, privateKey }
+}
+
+// 此处的公钥与私钥都是32位
+export const newBoxKeyPairFromArray = (pub: Uint8Array, pri: Uint8Array): KeyPair => {
+    return { publicKey: pub, privateKey: pri }
+}
+
+// 生成一个新的签名密钥对；如果私钥是64位，那么其后32位是公钥
+export const newSignKeyPair = (): KeyPair => {
+    const privateKey = ed25519.utils.randomPrivateKey()
+    const publicKey = ed25519.getPublicKey(privateKey)
+    return { publicKey, privateKey }
+}
+
+// 此处的公钥与私钥都是32位
+export const newSignKeyPairFromArray = (pub: Uint8Array, pri: Uint8Array): KeyPair => {
+    return { publicKey: pub, privateKey: pri }
+}
 
 export const generateUUID = () => {
     return crypto.randomUUID().replace(/-/g, '')
 }
 
-export const base64Encode = (input: ArrayBufferLike | base64.TypedArray | Buffer | string, urlsafe?: boolean, padding?: boolean): string => {
-    return base64.encode(input, urlsafe, padding)
+export const base64Encode = (input: ArrayBufferLike | base64.TypedArray | Buffer | string): string => {
+    return base64.encode(input, true, false)
 }
 
 export const base64Decode = (input: string): Uint8Array => {
     return base64.decode(input)
 }
 
-const encodePubString = (signKey: Uint8Array, boxKey: Uint8Array): string => {
-    const randomBytes = nacl.randomBytes(24)
-    const arr = [...signKey, ...boxKey]
+export const encodeSecureString = (signKey: Uint8Array, boxKey: Uint8Array): string => {
+    const randomBts = randomBytes(24)
+    const arr = [...randomBts, ...signKey, ...boxKey]
     const all = new Uint8Array(arr)
-
-    // for (let index = 17; index < all.length; index++) {
-    //     const element = all[index];
-    //     all[index] = element ^ all[index % 17]
-    // }
-    const val = base64Encode(all)
-    log.debug(`encodeSecureString, after:`, base64Decode(val))
-    return val
+    for (let index = 17; index < all.length; index++) {
+        const element = all[index];
+        all[index] = element ^ all[index % 17]
+    }
+    return base64Encode(all)
 }
 
-const encodePriString = (signKey: Uint8Array, boxKey: Uint8Array): string => {
-    const randomBytes = nacl.randomBytes(24)
-    const arr = [...signKey, ...boxKey]
-    const all = new Uint8Array(arr)
-
-    // for (let index = 17; index < all.length; index++) {
-    //     const element = all[index];
-    //     all[index] = element ^ all[index % 17]
-    // }
-    const val = base64Encode(all)
-    log.debug(`encodeSecureString, after:`, base64Decode(val))
-    return val
-}
-
-const decodePubString = (input: string): {
+export const decodeSecureString = (str: string): {
     sign: Uint8Array | null
     box: Uint8Array | null
 } => {
-    const all = base64Decode(input)
-    log.debug(`decodePubString, after:`, all)
-    // for (let index = 17; index < all.length; index++) {
-    //     const element = all[index];
-    //     all[index] = element ^ all[index % 17]
-    // }
-    const signPubKeySecure = all.subarray(0, 0 + nacl.sign.publicKeyLength)
-    const boxPubKeySecure = all.subarray(0 + nacl.sign.publicKeyLength)
-    if (signPubKeySecure.length != nacl.sign.publicKeyLength || boxPubKeySecure.length != nacl.box.publicKeyLength) {
-
+    if (!str || str.length <= 88) {
+        return { sign: null, box: null }
+    }
+    const all = base64Decode(str)
+    if (all.length != 88) {
+        return { sign: null, box: null }
+    }
+    for (let index = 17; index < all.length; index++) {
+        const element = all[index];
+        all[index] = element ^ all[index % 17]
+    }
+    const signPubKeySecure = all.slice(24, 56)
+    const boxPubKeySecure = all.slice(56)
+    if (signPubKeySecure.length != 32 || boxPubKeySecure.length != 32) {
         return { sign: null, box: null }
     }
 
     return { sign: signPubKeySecure, box: boxPubKeySecure }
 }
 
-const decodePriString = (input: string): {
-    sign: Uint8Array | null
-    box: Uint8Array | null
-} => {
-    const all = base64Decode(input)
-    log.debug(`decodePriString, after:`, all)
-    // for (let index = 17; index < all.length; index++) {
-    //     const element = all[index];
-    //     all[index] = element ^ all[index % 17]
-    // }
-
-    const signPriKeySecure = all.subarray(0, 0 + nacl.sign.secretKeyLength)
-    const boxPriKeySecure = all.subarray(0 + nacl.sign.secretKeyLength)
-    if (signPriKeySecure.length != nacl.sign.secretKeyLength || boxPriKeySecure.length != nacl.box.secretKeyLength) {
-        return { sign: null, box: null }
-    }
-
-    return { sign: signPriKeySecure, box: boxPriKeySecure }
-}
-const isEqualSimpleArrays = (arr1: Uint8Array, arr2: Uint8Array) => {
-    if (arr1.length !== arr2.length) {
-        return false;
-    }
-    for (let i = 0; i < arr1.length; i++) {
-        if (arr1[i] !== arr2[i]) {
-            return false;
-        }
-    }
-    return true;
-}
-
-export const decodeSecrets = (): [nacl.BoxKeyPair, nacl.SignKeyPair, string] => {
+export const decodeSecrets = (): [KeyPair, KeyPair, string] => {
     // 当前会话的公钥藏在会话Id中，私钥藏在 ck 中
-    let sessionId = document.cookie.split(';').find(c => c.trim().startsWith('sessionid='))?.split('=')[1] ?? ''
-    let clientKey = document.cookie.split(';').find(c => c.trim().startsWith('clientid='))?.split('=')[1] ?? ''
-    const pubKeys = decodePubString(sessionId)
-    const priKeys = decodePriString(clientKey)
+    let sessionId = document.cookie.split(';').find(c => c.trim().startsWith('sid='))?.split('=')[1] ?? ''
+    let clientKey = document.cookie.split(';').find(c => c.trim().startsWith('cid='))?.split('=')[1] ?? ''
+    const pubKeys = decodeSecureString(sessionId)
+    const priKeys = decodeSecureString(clientKey)
     if (!pubKeys.box || !pubKeys.sign || !priKeys.box || !priKeys.sign) {
         // 需要重新生成
-        const signKeyPair = nacl.sign.keyPair.fromSeed(nacl.randomBytes(nacl.sign.seedLength))
-        const boxKeyPair = nacl.box.keyPair.fromSecretKey(nacl.randomBytes(nacl.box.secretKeyLength))
+        const boxKeyPair = newBoxKeyPair()
+        const signKeyPair = newSignKeyPair()
+        sessionId = encodeSecureString(signKeyPair.publicKey, boxKeyPair.publicKey)
+        clientKey = encodeSecureString(signKeyPair.privateKey, boxKeyPair.privateKey)
+        document.cookie = `sid=${sessionId};path=/;samesite=lax`
+        document.cookie = `cid=${clientKey};path=/;samesite=lax`
         log.debug(`【decodeSecrets】new sign keypair `, signKeyPair)
         log.debug(`【decodeSecrets】new box keypair `, boxKeyPair)
-        sessionId = encodePubString(signKeyPair.publicKey, boxKeyPair.publicKey)
-        clientKey = encodePriString(signKeyPair.secretKey, boxKeyPair.secretKey,)
-        document.cookie = `sessionid=${sessionId};path=/;samesite=lax`
-        document.cookie = `clientid=${clientKey};path=/;samesite=lax`
-        const pubKeys1 = decodePubString(sessionId)
-        const priKeys1 = decodePriString(clientKey)
+
+        const pubKeys1 = decodeSecureString(sessionId)
+        const priKeys1 = decodeSecureString(clientKey)
         log.debug('xxxxxx sign', pubKeys1.sign, priKeys1.sign)
         log.debug('xxxxxx box', pubKeys1.box, priKeys1.box)
-        log.debug('sign pub key eq', isEqualSimpleArrays(pubKeys1.sign!, signKeyPair.publicKey))
-        log.debug('box pub key eq', isEqualSimpleArrays(pubKeys1.box!, boxKeyPair.publicKey))
-        log.debug('sign pri key eq', isEqualSimpleArrays(priKeys1.sign!, signKeyPair.secretKey))
-        log.debug('box pri key eq', isEqualSimpleArrays(priKeys1.box!, boxKeyPair.secretKey))
+        log.debug('sign pub key eq', equalBytes(pubKeys1.sign!, signKeyPair.publicKey))
+        log.debug('box pub key eq', equalBytes(pubKeys1.box!, boxKeyPair.publicKey))
+        log.debug('sign pri key eq', equalBytes(priKeys1.sign!, signKeyPair.privateKey))
+        log.debug('box pri key eq', equalBytes(priKeys1.box!, boxKeyPair.privateKey))
 
         return [boxKeyPair, signKeyPair, sessionId]
     } else {
-        // const boxKeyPair = { publicKey: boxPubKey, secretKey: boxPriKey }
-        // const signKeyPair = { publicKey: signPubKey, secretKey: singPriKey }
-        // log.debug(`【decodeSecrets】decode from cookie `, sessionId, clientKey, boxKeyPair, signKeyPair)
-        // return [boxKeyPair, signKeyPair, sessionId]
-        return [
-            { publicKey: pubKeys.box, secretKey: priKeys.box },
-            { publicKey: pubKeys.sign, secretKey: priKeys.sign },
-            sessionId
-        ]
+        const boxKeyPair = newBoxKeyPairFromArray(pubKeys.box, priKeys.box)
+        const signKeyPair = newSignKeyPairFromArray(pubKeys.sign, priKeys.sign)
+        log.debug(`【decodeSecrets】decode from cookie `, sessionId, clientKey, signKeyPair, boxKeyPair)
+        return [boxKeyPair, signKeyPair, sessionId]
     }
 }
 
-export const encryptData = (kp: nacl.BoxKeyPair, data: string): string => {
-    const rawData = encoder.encode(data)
+// 加密数据
+export const encryptData = (key: KeyPair, data: string): string => {
     const serverExPubKey = base64Decode(import.meta.env.VITE_SERVER_EX_PUB_KEY)
-    const nonce = nacl.randomBytes(nacl.box.nonceLength)
-    const res = nacl.box(rawData, nonce, serverExPubKey, kp.secretKey)
-    return decoder.decode(new Uint8Array([...res, ...nonce]))
+    const shareKey = x25519.getSharedSecret(key.privateKey, serverExPubKey)
+    const rawData = utf8ToBytes(data)
+    const nonce = randomBytes(12)
+    const aes = gcm(shareKey, nonce)
+    const res = aes.encrypt(rawData)
+    log.debug(`【encryptData】secret is`, shareKey)
+    log.debug(`【encryptData】nonce is`, nonce)
+    log.debug(`【encryptData】result is`, res)
+    return base64Encode(new Uint8Array([...nonce, ...res]))
 }
 
-export const decryptData = (kp: nacl.BoxKeyPair, data: string): string => {
-    const rawData = encoder.encode(data)
-    const body = rawData.slice(0, rawData.length - nacl.box.nonceLength)
-    const nonce = rawData.slice(rawData.length - nacl.box.nonceLength)
+// 解密数据
+export const decryptData = (key: KeyPair, data: string): string => {
     const serverExPubKey = base64Decode(import.meta.env.VITE_SERVER_EX_PUB_KEY)
-    const decrypted = nacl.box.open(body, nonce, serverExPubKey, kp.secretKey)
+    const shareKey = x25519.getSharedSecret(key.privateKey, serverExPubKey)
+    const rawData = base64Decode(data)
+    const nonce = rawData.slice(0, 12)
+    const body = rawData.slice(12)
+    log.debug(`【decryptData】secret is`, shareKey)
+    log.debug(`【decryptData】rawData is`, rawData)
+    log.debug(`【decryptData】nonce is`, nonce)
+    log.debug(`【decryptData】body is`, body)
+    const aes = gcm(shareKey, nonce)
+    const decrypted = aes.decrypt(body)
     if (!decrypted) {
         return ""
     }
-    return decoder.decode(decrypted)
+    return bytesToUtf8(decrypted)
 }
 
 export const stringifyObj = (obj: any) => {
@@ -164,17 +158,19 @@ export const stringifyObj = (obj: any) => {
     return strObj
 }
 
-export const generateSignature = (kp: nacl.SignKeyPair, data: string): string => {
-    // Signs the message using the secret key and returns a signature.
-    const arr = nacl.sign.detached(encoder.encode(data), kp.secretKey)
-    return base64Encode(arr, true, false)
+// 给对象按照指定的规则签名
+export const signData = (kp: KeyPair, data: string): string => {
+    const rawData = utf8ToBytes(data)
+    const out = ed25519.sign(rawData, kp.privateKey)
+    return base64Encode(out)
 }
 
-export const verifySignature = (data: string, signature: string) => {
-    const signData = encoder.encode(data)
+// 验证对象的签名是否正确
+export const verifyDataSign = (data: string, signature: string) => {
+    const rawData = utf8ToBytes(data)
+    const sigData = base64Decode(signature)
     const serverSignPubKey = base64Decode(import.meta.env.VITE_SERVER_SIGN_PUB_KEY)
-    // Verifies the signature for the message and returns true if verification succeeded or false if it failed.
-    return nacl.sign.detached.verify(signData, base64Decode(signature), serverSignPubKey)
+    return ed25519.verify(sigData, rawData, serverSignPubKey)
 }
 
 export const getPlatform = () => {
